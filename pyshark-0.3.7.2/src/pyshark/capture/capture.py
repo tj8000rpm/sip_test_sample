@@ -377,7 +377,8 @@ class Capture(object):
         """
         if process.returncode is None:
             try:
-                process.kill()
+                process.terminate()
+                #process.kill()
             except ProcessLookupError:
                 pass
             except OSError:
