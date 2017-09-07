@@ -10,6 +10,20 @@ import threading
 import unittest
 import trollius as asyncio
 
+class SipTools:
+    # パケットの配列、Dictを引数
+    @staticmethod
+    def getFinalResponse(packets):
+        finalResponse=None
+        for packet in packets:
+            if 'status-code' in packet and 'cseq_method' in packet:
+                statuscode=packet["status-code"]
+                cseqmethod=packet["cseq_method"]
+                if cseqmethod == 'INVITE':
+                    finalResponse=statuscode
+        return finalResponse
+            
+
 class OneShotCaptureThread(threading.Thread):
     output=None
     timeout=30
@@ -21,7 +35,7 @@ class OneShotCaptureThread(threading.Thread):
         caps=None
         output=None
         try:
-            caps = pyshark.LiveCapture(interface='11',bpf_filter='ip and udp')
+            caps = pyshark.LiveCapture(interface='lo',bpf_filter='ip and udp')
             caps.sniff(timeout=self.timeout)
             output=[]
             for packet in caps._packets:
@@ -55,6 +69,7 @@ class OneShotCaptureThread(threading.Thread):
                 udp_body_str=""
                 statuscode=None
                 method=None
+                cseqMethod=None
                 msg_fields=packet.layers[-1]._all_fields
                 if 'sip.Request-Line' in msg_fields:
                     udp_body_str=udp_body_str+str(msg_fields['sip.Request-Line'])+'\n'
@@ -62,11 +77,13 @@ class OneShotCaptureThread(threading.Thread):
                 else:
                     udp_body_str=udp_body_str+str(msg_fields['sip.Status-Line'])+'\n'
                     statuscode=msg_fields["sip.Status-Code"]
+                if 'sip.CSeq.method' in msg_fields:
+                    cseqMethod=msg_fields["sip.CSeq.method"]
 
                 sip_first_line=udp_body_str.strip()
                 udp_body_str=udp_body_str+str(msg_fields['sip.msg_hdr']).replace('\\xd\\xa','\r\n')
                 
-                udp_body_str=udp_body_str+'\n'
+                udp_body_str=udp_body_str
                 msg_fields=None
                 ############################################################
 
@@ -79,7 +96,9 @@ class OneShotCaptureThread(threading.Thread):
                 if method != None:
                     message["method"]=method
                 else:
-                    message["status-coe"]=statuscode
+                    message["status-code"]=statuscode
+                if cseqMethod != None:
+                    message["cseq_method"]=cseqMethod
                 output.append(message)
         finally:
             self.output=output
@@ -90,22 +109,43 @@ class OneShotCaptureThread(threading.Thread):
         return self.output
 
 class Test_Sample(unittest.TestCase):
+
     def test_sample1(self):
-        timeout=5
+        timeout=15
         myth=OneShotCaptureThread(timeout)
         myth.start()
-        #time.sleep(0.02)
-        uas = pysipp.server(srcaddr=('127.0.0.1', 5060))
-        uac = pysipp.client(destaddr=uas.srcaddr)
-        
+        uas = pysipp.server(srcaddr=('127.0.0.1', 5060),scen_file='/root/scenarios/rcv-default.xml')
+        uac = pysipp.client(destaddr=uas.srcaddr,scen_file='/root/scenarios/snd-default.xml',info_file='/root/PNS40-orig.csv')
         # run server async
         uas(block=False) # returns a `pysipp.launch.PopenRunner` instance by default
         uac()            # run client synchronously
         myth.join()
         ret=myth.getResult()
-        find=str(ret).find('180 Ringing')
-        print ret
-        self.assertNotEqual(find,-1)
+        for packet in ret:
+            print packet["timestamp"],
+            print packet["src"],
+            print packet["dst"],
+            print packet["first_line"]
+#            print packet["raw_text"]
+        self.assertEqual(SipTools.getFinalResponse(ret),'200')
+    
+    def test_sample2(self):
+        timeout=15
+        myth=OneShotCaptureThread(timeout)
+        myth.start()
+        uas = pysipp.server(srcaddr=('127.0.0.1', 5060),scen_file='/root/scenarios/rcv-default.error.xml')
+        uac = pysipp.client(destaddr=uas.srcaddr,scen_file='/root/scenarios/snd-default.xml',info_file='/root/PNS40-orig.csv')
+        # run server async
+        uas(block=False) # returns a `pysipp.launch.PopenRunner` instance by default
+        uac()            # run client synchronously
+        myth.join()
+        ret=myth.getResult()
+        for packet in ret:
+            print packet["timestamp"],
+            print packet["src"],
+            print packet["dst"],
+            print packet["first_line"]
+        self.assertEqual(SipTools.getFinalResponse(ret),'200')
 
 if __name__ == "__main__":
     unittest.main()
