@@ -6,42 +6,27 @@ import unittest
 
 class Test_Sample(unittest.TestCase):
     def test_sample1(self):
-        result=BasicTest(
-                    uas_scean=['/root/scenarios/rcv-default.xml'],
-                    uac_info_file=['/root/rcv-info.csv']       ,
-                    uac_scean=['/root/scenarios/snd-default.xml'],
-                    timeout=15
-                ).run_test_case()
-
-        for packet in result:
-            print packet["timestamp"],
-            print packet["src"],
-            print packet["dst"],
-            print packet["first_line"]
+        uas=[UAServer(ip='127.0.0.1',port=5060,scen_file='/root/scenarios/rcv-default.xml')]
+        uac=[UAClient(ip='127.0.0.1',port=5061,dest_ip='127.0.0.1',dest_port=5060,scen_file='/root/scenarios/snd-default.xml',info_file='/root/rcv-info.csv')]
+        result=BasicTest( uas_array=uas, uac_array=uac, timeout=20, capture_filter='sip').run_test_case()
 
         self.assertEqual(AnalyzingTools.getFinalResponse(result),'200')
-        print '--------------------'
 
     def test_sample2(self):
+        uas=[]
+        uas.append(UAServer(scen_file='/root/scenarios/rcv-default.error.xml',ip='127.0.0.1',port=5060))
+        uac=[]
+        uac.append(UAClient(scen_file='/root/scenarios/snd-default.xml',ip='127.0.0.1',port=5061,dest_ip='127.0.0.1',dest_port=5060,info_file='/root/rcv-info.csv'))
 
-        result=BasicTest(
-                    uas_scean=['/root/scenarios/rcv-default.error.xml'],
-                    uas_ip=['127.0.0.1'],
-                    uas_port=[5060],
-                    uas_info_file=[None]             ,
-                    uac_info_file=['/root/rcv-info.csv']             ,
-                    uac_scean=['/root/scenarios/snd-default.xml']      ,
-                    timeout=5
-                ).run_test_case()
+        result=BasicTest(uas_array=uas, uac_array=uac, timeout=20, capture_filter='sip').run_test_case()
 
-        for packet in result:
-            print packet["timestamp"],
-            print packet["src"],
-            print packet["dst"],
-            print packet["first_line"]
+        #for packet in result:
+        #    print packet["timestamp"],
+        #    print packet["src"],
+        #    print packet["dst"],
+        #    print packet["first_line"]
 
         self.assertEqual(AnalyzingTools.getFinalResponse(result),'200')
-        print '--------------------'
 
 if __name__ == "__main__":
     unittest.main()

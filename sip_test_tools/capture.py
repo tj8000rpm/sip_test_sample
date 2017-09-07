@@ -8,17 +8,20 @@ class CaptureThread(threading.Thread):
     output=None
     timeout=30
     capture_interface='lo'
+    capture_filter=None
     caps=None
-    def __init__(self,timeout=30,capture_interface='lo'):
+    def __init__(self,timeout=30,capture_interface='lo',capture_filter='udp'):
         threading.Thread.__init__(self)
         self.timeout=timeout
         self.capture_interface=capture_interface
+        self.capture_filter=capture_filter
+        #self.capture_filter='ip and udp'
 
     def run(self):
         self.caps=None
         output=None
         try:
-            self.caps = pyshark.LiveCapture(interface=self.capture_interface,bpf_filter='ip and udp')
+            self.caps = pyshark.LiveCapture(interface=self.capture_interface,display_filter=self.capture_filter)
             self.caps.sniff(timeout=self.timeout)
             output=[]
             for packet in self.caps._packets:
